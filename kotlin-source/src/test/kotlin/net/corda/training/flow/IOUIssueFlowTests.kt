@@ -96,26 +96,26 @@ class IOUIssueFlowTests {
      * Hint: You can verify on the builder directly prior to finalizing the transaction. This way
      * you can confirm the transaction prior to making it immutable with the signature.
      */
-//    @Test
-//    fun flowReturnsVerifiedPartiallySignedTransaction() {
-//        // Check that a zero amount IOU fails.
-//        val lender = a.info.chooseIdentityAndCert().party
-//        val borrower = b.info.chooseIdentityAndCert().party
-//        val zeroIou = IOUState(0.POUNDS, lender, borrower)
-//        val futureOne = a.startFlow(IOUIssueFlow(zeroIou))
-//        mockNetwork.runNetwork()
-//        assertFailsWith<TransactionVerificationException> { futureOne.getOrThrow() }
-//        // Check that an IOU with the same participants fails.
-//        val borrowerIsLenderIou = IOUState(10.POUNDS, lender, lender)
-//        val futureTwo = a.startFlow(IOUIssueFlow(borrowerIsLenderIou))
-//        mockNetwork.runNetwork()
-//        assertFailsWith<TransactionVerificationException> { futureTwo.getOrThrow() }
-//        // Check a good IOU passes.
-//        val iou = IOUState(10.POUNDS, lender, borrower)
-//        val futureThree = a.startFlow(IOUIssueFlow(iou))
-//        mockNetwork.runNetwork()
-//        futureThree.getOrThrow()
-//    }
+    @Test
+    fun flowReturnsVerifiedPartiallySignedTransaction() {
+        // Check that a zero amount IOU fails.
+        val lender = a.info.chooseIdentityAndCert().party
+        val borrower = b.info.chooseIdentityAndCert().party
+        val zeroIou = IOUState(0.POUNDS, lender, borrower)
+        val futureOne = a.startFlow(IOUIssueFlow(zeroIou))
+        mockNetwork.runNetwork()
+        assertFailsWith<TransactionVerificationException> { futureOne.getOrThrow() }
+        // Check that an IOU with the same participants fails.
+        val borrowerIsLenderIou = IOUState(10.POUNDS, lender, lender)
+        val futureTwo = a.startFlow(IOUIssueFlow(borrowerIsLenderIou))
+        mockNetwork.runNetwork()
+        assertFailsWith<TransactionVerificationException> { futureTwo.getOrThrow() }
+        // Check a good IOU passes.
+        val iou = IOUState(10.POUNDS, lender, borrower)
+        val futureThree = a.startFlow(IOUIssueFlow(iou))
+        mockNetwork.runNetwork()
+        futureThree.getOrThrow()
+    }
 
     /**
      * IMPORTANT: Review the [CollectSignaturesFlow] before continuing here.
