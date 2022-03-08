@@ -2,6 +2,7 @@ package net.corda.training.flow
 
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.Command
+import net.corda.core.contracts.StateAndContract
 import net.corda.core.contracts.requireThat
 import net.corda.core.flows.CollectSignaturesFlow
 import net.corda.core.flows.FinalityFlow
@@ -30,13 +31,13 @@ class IOUIssueFlow(val state: IOUState) : FlowLogic<SignedTransaction>() {
     override fun call(): SignedTransaction {
         // create TransactionBuilder
         val notary: Party = serviceHub.networkMapCache.notaryIdentities.first()
-        val builder = TransactionBuilder(notary = notary)
 
         // create command and add to transaction builder
         val signers = state.participants.map { it.owningKey }
         val cmd = Command(IOUContract.Commands.Issue(), signers)
-        builder.addCommand(cmd)
-        builder.addOutputState(state)
+        val builder = TransactionBuilder(notary = notary).withItems(cmd, StateAndContract(state, IOUContract.IOU_CONTRACT_ID))
+//        builder.addCommand(cmd)
+//        builder.addOutputState(state)
 
         // sign tx
         return serviceHub.signInitialTransaction(builder)
