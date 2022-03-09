@@ -4,14 +4,7 @@ import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.Command
 import net.corda.core.contracts.StateAndContract
 import net.corda.core.contracts.requireThat
-import net.corda.core.flows.CollectSignaturesFlow
-import net.corda.core.flows.FinalityFlow
-import net.corda.core.flows.FlowLogic
-import net.corda.core.flows.FlowSession
-import net.corda.core.flows.InitiatedBy
-import net.corda.core.flows.InitiatingFlow
-import net.corda.core.flows.SignTransactionFlow
-import net.corda.core.flows.StartableByRPC
+import net.corda.core.flows.*
 import net.corda.core.identity.Party
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
@@ -35,11 +28,18 @@ class IOUIssueFlow(val state: IOUState) : FlowLogic<SignedTransaction>() {
         // create command and add to transaction builder
         val signers = state.participants.map { it.owningKey }
         val cmd = Command(IOUContract.Commands.Issue(), signers)
-        val builder = TransactionBuilder(notary = notary).withItems(cmd, StateAndContract(state, IOUContract.IOU_CONTRACT_ID))
+        val builder =
+            TransactionBuilder(notary = notary).withItems(cmd, StateAndContract(state, IOUContract.IOU_CONTRACT_ID))
         builder.verify(serviceHub)
 
-        // sign tx -- this finalises it
-        return serviceHub.signInitialTransaction(builder)
+        // sign tx -- this finalises it. OR DOES IT??
+        val initialTx = serviceHub.signInitialTransaction(builder)
+
+        // collect signatures
+        val otherSigners = state.participants.filter { it.owningKey != ourIdentity.owningKey }
+        val flowSessions = otherSigners.map { initiateFlow(it) }
+        val signedTx = subFlow(CollectSignaturesFlow(initialTx, flowSessions))
+        return subFlow(FinalityFlow(signedTx, flowSessions))
     }
 }
 
@@ -57,6 +57,8 @@ class IOUIssueFlowResponder(val flowSession: FlowSession): FlowLogic<Unit>() {
                 "This must be an IOU transaction" using (output is IOUState)
             }
         }
-        subFlow(signedTransactionFlow)
+        val signed = subFlow(signedTransactionFlow)
+        // not 100% sure the following is correct, but it passes the tests
+        subFlow(ReceiveFinalityFlow(flowSession, signed.tx.id))
     }
 }
