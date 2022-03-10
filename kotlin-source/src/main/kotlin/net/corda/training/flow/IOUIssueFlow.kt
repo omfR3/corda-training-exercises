@@ -5,7 +5,6 @@ import net.corda.core.contracts.Command
 import net.corda.core.contracts.StateAndContract
 import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
-import net.corda.core.identity.Party
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.training.contract.IOUContract
@@ -22,14 +21,11 @@ import net.corda.training.state.IOUState
 class IOUIssueFlow(val state: IOUState) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
-        // create TransactionBuilder
-        val notary: Party = serviceHub.networkMapCache.notaryIdentities.first()
-
         // create command and add to transaction builder
         val signers = state.participants.map { it.owningKey }
         val cmd = Command(IOUContract.Commands.Issue(), signers)
-        val builder =
-            TransactionBuilder(notary = notary).withItems(cmd, StateAndContract(state, IOUContract.IOU_CONTRACT_ID))
+        val builder = TransactionBuilder(notary = serviceHub.networkMapCache.notaryIdentities.first())
+            .withItems(cmd, StateAndContract(state, IOUContract.IOU_CONTRACT_ID))
         builder.verify(serviceHub)
 
         // sign tx -- this finalises it. OR DOES IT??

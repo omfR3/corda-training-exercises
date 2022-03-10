@@ -1,8 +1,7 @@
 package net.corda.training.flow
 
 import co.paralleluniverse.fibers.Suspendable
-import net.corda.core.contracts.UniqueIdentifier
-import net.corda.core.contracts.requireThat
+import net.corda.core.contracts.*
 import net.corda.core.flows.CollectSignaturesFlow
 import net.corda.core.flows.FinalityFlow
 import net.corda.core.flows.FlowLogic
@@ -12,8 +11,13 @@ import net.corda.core.flows.InitiatingFlow
 import net.corda.core.flows.SignTransactionFlow
 import net.corda.core.flows.StartableByRPC
 import net.corda.core.identity.Party
+import net.corda.core.node.services.Vault
+import net.corda.core.node.services.queryBy
+import net.corda.core.node.services.vault.QueryCriteria
+import net.corda.core.node.services.vault.QueryCriteria.*
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
+import net.corda.training.contract.IOUContract
 import net.corda.training.state.IOUState
 
 /**
@@ -27,10 +31,33 @@ import net.corda.training.state.IOUState
 class IOUTransferFlow(val linearId: UniqueIdentifier, val newLender: Party): FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
-        // Placeholder code to avoid type error when running the tests. Remove before starting the flow task!
-        return serviceHub.signInitialTransaction(
-                TransactionBuilder(notary = null)
-        )
+        // get input state from vault (is there a simpler way to do this?)
+        val linearStateCriteria = LinearStateQueryCriteria(linearId = listOf(linearId), status = Vault.StateStatus.ALL)
+        val vaultCriteria = VaultQueryCriteria(status = Vault.StateStatus.ALL)
+        val states = serviceHub.vaultService.queryBy<IOUState>(linearStateCriteria and vaultCriteria).states
+        // create new state with updated lender
+        val state = states[0].state.data.withNewLender(newLender)
+        println("Ah here. $state")
+
+        // create command
+        val signers = state.participants.map { it.owningKey }
+        val cmd = Command(IOUContract.Commands.Transfer(), signers)
+
+        // create tx builder
+        val builder = TransactionBuilder(notary = serviceHub.networkMapCache.notaryIdentities.first())
+            .withItems(cmd, StateAndContract(state, IOUContract.IOU_CONTRACT_ID))
+        builder.verify(serviceHub)
+
+        // initial signature
+        val initialTx = serviceHub.signInitialTransaction(builder)
+
+        // collect signatures
+        val otherSigners = state.participants.filter { it.owningKey != ourIdentity.owningKey }
+        val flowSessions = otherSigners.map { initiateFlow(it) }
+        val signedTx = subFlow(CollectSignaturesFlow(initialTx, flowSessions))
+
+        // finalise
+        return subFlow(FinalityFlow(signedTx, flowSessions))
     }
 }
 
