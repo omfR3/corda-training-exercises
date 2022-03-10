@@ -24,19 +24,27 @@ class IOUTransferFlow(val linearId: UniqueIdentifier, val newLender: Party): Flo
     @Suspendable
     override fun call(): SignedTransaction {
         // retrieve input state from vault
-        val inputState = retrieveInputState()
+        val inputStateAndRef = retrieveInputState()
+        val inputState = inputStateAndRef.state.data
 
-        // create output state with new lender
-        val outputState = inputState.state.data.withNewLender(newLender)
+        // flow must be initiated by the current lender. Is this the right way to check that?
+        val initiator = serviceHub.myInfo.legalIdentities.first()
+        if (initiator != inputState.lender) {
+            throw IllegalArgumentException("Transfer flow must be initiated by the original lender.")
+        }
 
         // create command, with 3 signatories (borrower, old lender, new lender)
-        val signers = (inputState.state.data.participants + newLender).map { it.owningKey }
+        val parties = listOf(inputState.borrower, inputState.lender, newLender)
+        val signers = parties.map { it.owningKey }
         val cmd = Command(IOUContract.Commands.Transfer(), signers)
+
+        // create output state with new lender
+        val outputState = inputState.withNewLender(newLender)
 
         // create tx builder
         val builder = TransactionBuilder(notary = serviceHub.networkMapCache.notaryIdentities.first())
             .addCommand(cmd)
-            .addInputState(inputState)
+            .addInputState(inputStateAndRef)
             .addOutputState(outputState, IOUContract.IOU_CONTRACT_ID)
         builder.verify(serviceHub)
 
@@ -44,7 +52,7 @@ class IOUTransferFlow(val linearId: UniqueIdentifier, val newLender: Party): Flo
         val initialTx = serviceHub.signInitialTransaction(builder)
 
         // collect signatures
-        val otherSigners = outputState.participants.filter { it.owningKey != ourIdentity.owningKey }
+        val otherSigners = parties.filter { it.owningKey != ourIdentity.owningKey }
         val flowSessions = otherSigners.map { initiateFlow(it) }
         val signedTx = subFlow(CollectSignaturesFlow(initialTx, flowSessions))
 

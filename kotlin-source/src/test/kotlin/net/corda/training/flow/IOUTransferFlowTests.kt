@@ -108,17 +108,17 @@ class IOUTransferFlowTests {
      *   retrieved from the vault.
      * - Throw an [IllegalArgumentException] if the wrong party attempts to run the flow!
      */
-//    @Test
-//    fun flowCanOnlyBeRunByCurrentLender() {
-//        val lender = a.info.chooseIdentityAndCert().party
-//        val borrower = b.info.chooseIdentityAndCert().party
-//        val stx = issueIou(IOUState(10.POUNDS, lender, borrower))
-//        val inputIou = stx.tx.outputs.single().data as IOUState
-//        val flow = IOUTransferFlow(inputIou.linearId, c.info.chooseIdentityAndCert().party)
-//        val future = b.startFlow(flow)
-//        mockNetwork.runNetwork()
-//        assertFailsWith<IllegalArgumentException> { future.getOrThrow() }
-//    }
+    @Test
+    fun flowCanOnlyBeRunByCurrentLender() {
+        val lender = a.info.chooseIdentityAndCert().party
+        val borrower = b.info.chooseIdentityAndCert().party
+        val stx = issueIou(IOUState(10.POUNDS, lender, borrower))
+        val inputIou = stx.tx.outputs.single().data as IOUState
+        val flow = IOUTransferFlow(inputIou.linearId, c.info.chooseIdentityAndCert().party)
+        val future = b.startFlow(flow)
+        mockNetwork.runNetwork()
+        assertFailsWith<IllegalArgumentException> { future.getOrThrow() }
+    }
 
     /**
      * Task 3.
