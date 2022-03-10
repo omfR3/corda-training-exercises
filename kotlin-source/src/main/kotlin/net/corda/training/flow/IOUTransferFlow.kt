@@ -13,7 +13,6 @@ import net.corda.core.flows.StartableByRPC
 import net.corda.core.identity.Party
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.queryBy
-import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.node.services.vault.QueryCriteria.*
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
@@ -36,23 +35,25 @@ class IOUTransferFlow(val linearId: UniqueIdentifier, val newLender: Party): Flo
         val vaultCriteria = VaultQueryCriteria(status = Vault.StateStatus.ALL)
         val states = serviceHub.vaultService.queryBy<IOUState>(linearStateCriteria and vaultCriteria).states
         // create new state with updated lender
-        val state = states[0].state.data.withNewLender(newLender)
-        println("Ah here. $state")
+        val inputState = states[0]
+        val outputState = states[0].state.data.withNewLender(newLender)
 
         // create command
-        val signers = state.participants.map { it.owningKey }
+        val signers = outputState.participants.map { it.owningKey }
         val cmd = Command(IOUContract.Commands.Transfer(), signers)
 
         // create tx builder
         val builder = TransactionBuilder(notary = serviceHub.networkMapCache.notaryIdentities.first())
-            .withItems(cmd, StateAndContract(state, IOUContract.IOU_CONTRACT_ID))
+            .addCommand(cmd)
+            .addInputState(inputState)
+            .addOutputState(outputState, IOUContract.IOU_CONTRACT_ID)
         builder.verify(serviceHub)
 
         // initial signature
         val initialTx = serviceHub.signInitialTransaction(builder)
 
         // collect signatures
-        val otherSigners = state.participants.filter { it.owningKey != ourIdentity.owningKey }
+        val otherSigners = outputState.participants.filter { it.owningKey != ourIdentity.owningKey }
         val flowSessions = otherSigners.map { initiateFlow(it) }
         val signedTx = subFlow(CollectSignaturesFlow(initialTx, flowSessions))
 
