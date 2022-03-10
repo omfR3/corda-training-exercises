@@ -2,14 +2,7 @@ package net.corda.training.flow
 
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.*
-import net.corda.core.flows.CollectSignaturesFlow
-import net.corda.core.flows.FinalityFlow
-import net.corda.core.flows.FlowLogic
-import net.corda.core.flows.FlowSession
-import net.corda.core.flows.InitiatedBy
-import net.corda.core.flows.InitiatingFlow
-import net.corda.core.flows.SignTransactionFlow
-import net.corda.core.flows.StartableByRPC
+import net.corda.core.flows.*
 import net.corda.core.identity.Party
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.queryBy
@@ -30,16 +23,14 @@ import net.corda.training.state.IOUState
 class IOUTransferFlow(val linearId: UniqueIdentifier, val newLender: Party): FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
-        // get input state from vault (is there a simpler way to do this?)
-        val linearStateCriteria = LinearStateQueryCriteria(linearId = listOf(linearId), status = Vault.StateStatus.ALL)
-        val vaultCriteria = VaultQueryCriteria(status = Vault.StateStatus.ALL)
-        val states = serviceHub.vaultService.queryBy<IOUState>(linearStateCriteria and vaultCriteria).states
-        // create new state with updated lender
-        val inputState = states[0]
-        val outputState = states[0].state.data.withNewLender(newLender)
+        // retrieve input state from vault
+        val inputState = retrieveInputState()
 
-        // create command
-        val signers = outputState.participants.map { it.owningKey }
+        // create output state with new lender
+        val outputState = inputState.state.data.withNewLender(newLender)
+
+        // create command, with 3 signatories (borrower, old lender, new lender)
+        val signers = (inputState.state.data.participants + newLender).map { it.owningKey }
         val cmd = Command(IOUContract.Commands.Transfer(), signers)
 
         // create tx builder
@@ -60,6 +51,13 @@ class IOUTransferFlow(val linearId: UniqueIdentifier, val newLender: Party): Flo
         // finalise
         return subFlow(FinalityFlow(signedTx, flowSessions))
     }
+
+    private fun retrieveInputState(): StateAndRef<IOUState> {
+        // get input state from vault (is there a simpler way to do this?)
+        val linearStateCriteria = LinearStateQueryCriteria(linearId = listOf(linearId), status = Vault.StateStatus.ALL)
+        val vaultCriteria = VaultQueryCriteria(status = Vault.StateStatus.ALL)
+        return serviceHub.vaultService.queryBy<IOUState>(linearStateCriteria and vaultCriteria).states[0]
+    }
 }
 
 /**
@@ -77,6 +75,8 @@ class IOUTransferFlowResponder(val flowSession: FlowSession): FlowLogic<Unit>() 
             }
         }
 
-        subFlow(signedTransactionFlow)
+        val signed = subFlow(signedTransactionFlow)
+        // not 100% sure the following is correct, but it passes the tests
+        subFlow(ReceiveFinalityFlow(flowSession, signed.tx.id))
     }
 }
