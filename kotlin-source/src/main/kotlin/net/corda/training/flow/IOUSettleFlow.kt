@@ -2,14 +2,7 @@ package net.corda.training.flow
 
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.*
-import net.corda.core.flows.CollectSignaturesFlow
-import net.corda.core.flows.FinalityFlow
-import net.corda.core.flows.FlowLogic
-import net.corda.core.flows.FlowSession
-import net.corda.core.flows.InitiatedBy
-import net.corda.core.flows.InitiatingFlow
-import net.corda.core.flows.SignTransactionFlow
-import net.corda.core.flows.StartableByRPC
+import net.corda.core.flows.*
 import net.corda.core.identity.PartyAndCertificate
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.queryBy
@@ -72,7 +65,13 @@ class IOUSettleFlow(val linearId: UniqueIdentifier, val amount: Amount<Currency>
 
         // initial signature
         val initialTx = serviceHub.signInitialTransaction(builder)
-        return initialTx
+
+        // collect signatures
+        val flowSessions = listOf(initiateFlow(inputState.lender))
+        val signedTx = subFlow(CollectSignaturesFlow(initialTx, flowSessions))
+
+        // finalise
+        return subFlow(FinalityFlow(signedTx, flowSessions))
     }
 
     private fun retrieveInputState(): StateAndRef<IOUState> {
@@ -99,7 +98,9 @@ class IOUSettleFlowResponder(val flowSession: FlowSession): FlowLogic<Unit>() {
             }
         }
 
-        subFlow(signedTransactionFlow)
+        val signed = subFlow(signedTransactionFlow)
+        // not 100% sure the following is correct, but it passes the tests
+        subFlow(ReceiveFinalityFlow(flowSession, signed.tx.id))
     }
 }
 
