@@ -1,9 +1,7 @@
 package net.corda.training.flow
 
 import co.paralleluniverse.fibers.Suspendable
-import net.corda.core.contracts.Amount
-import net.corda.core.contracts.UniqueIdentifier
-import net.corda.core.contracts.requireThat
+import net.corda.core.contracts.*
 import net.corda.core.flows.CollectSignaturesFlow
 import net.corda.core.flows.FinalityFlow
 import net.corda.core.flows.FlowLogic
@@ -12,11 +10,17 @@ import net.corda.core.flows.InitiatedBy
 import net.corda.core.flows.InitiatingFlow
 import net.corda.core.flows.SignTransactionFlow
 import net.corda.core.flows.StartableByRPC
+import net.corda.core.identity.PartyAndCertificate
+import net.corda.core.node.services.Vault
+import net.corda.core.node.services.queryBy
+import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.OpaqueBytes
 import net.corda.finance.contracts.asset.Cash
 import net.corda.finance.flows.CashIssueFlow
+import net.corda.finance.workflows.asset.CashUtils
+import net.corda.training.contract.IOUContract
 import net.corda.training.state.IOUState
 import java.util.*
 
@@ -31,10 +35,45 @@ import java.util.*
 class IOUSettleFlow(val linearId: UniqueIdentifier, val amount: Amount<Currency>): FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
-        // Placeholder code to avoid type error when running the tests. Remove before starting the flow task!
-        return serviceHub.signInitialTransaction(
-                TransactionBuilder(notary = null)
-        )
+        // retrieve input state from vault
+        val inputStateAndRef = retrieveInputState()
+        val inputState = inputStateAndRef.state.data
+
+        // validate that only the borrower can run the flow
+        val myIdentity = serviceHub.myInfo.legalIdentitiesAndCerts.first()
+        if (myIdentity.party != inputState.borrower) {
+            throw IllegalArgumentException("Nah man")
+        }
+
+        // create command, with 2 signatories...?
+        val parties = inputState.participants
+        val signers = parties.map { it.owningKey }
+        val cmd = Command(IOUContract.Commands.Settle(), signers)
+
+        // create tx builder
+        val builder = TransactionBuilder(notary = serviceHub.networkMapCache.notaryIdentities.first())
+
+        // create 2 output states
+        CashUtils.generateSpend(serviceHub, builder, amount, myIdentity, inputState.lender)
+        val newIouState = inputState.pay(amount)
+
+        builder
+            .addCommand(cmd)
+            .addInputState(inputStateAndRef)
+            .addOutputState(newIouState, IOUContract.IOU_CONTRACT_ID)
+            .verify(serviceHub)
+
+        // initial signature
+        val initialTx = serviceHub.signInitialTransaction(builder)
+        return initialTx
+    }
+
+    private fun retrieveInputState(): StateAndRef<IOUState> {
+        // get input state from vault (is there a simpler way to do this?)
+        val linearStateCriteria =
+            QueryCriteria.LinearStateQueryCriteria(linearId = listOf(linearId), status = Vault.StateStatus.ALL)
+        val vaultCriteria = QueryCriteria.VaultQueryCriteria(status = Vault.StateStatus.ALL)
+        return serviceHub.vaultService.queryBy<IOUState>(linearStateCriteria and vaultCriteria).states[0]
     }
 }
 
