@@ -150,15 +150,15 @@ class IOUSettleFlowTests {
      * - Use [serviceHub.getCashBalances] - it is a map which can be queried by [Currency].
      * - Use an if statement to check there is cash in the right currency present.
      */
-//    @Test
-//    fun borrowerMustHaveCashInRightCurrency() {
-//        val stx = issueIou(IOUState(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
-//        val inputIou = stx.tx.outputs.single().data as IOUState
-//        val flow = IOUSettleFlow(inputIou.linearId, 5.POUNDS)
-//        val future = a.startFlow(flow)
-//        mockNetwork.runNetwork()
-//        assertFailsWith<IllegalArgumentException>("Borrower has no GBP to settle.") { future.getOrThrow() }
-//    }
+    @Test
+    fun borrowerMustHaveCashInRightCurrency() {
+        val stx = issueIou(IOUState(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
+        val inputIou = stx.tx.outputs.single().data as IOUState
+        val flow = IOUSettleFlow(inputIou.linearId, 5.POUNDS)
+        val future = a.startFlow(flow)
+        mockNetwork.runNetwork()
+        assertFailsWith<IllegalArgumentException>("Borrower has no GBP to settle.") { future.getOrThrow() }
+    }
 
     /**
      * Task 4.

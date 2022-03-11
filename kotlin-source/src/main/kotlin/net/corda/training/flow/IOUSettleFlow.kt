@@ -20,6 +20,7 @@ import net.corda.core.utilities.OpaqueBytes
 import net.corda.finance.contracts.asset.Cash
 import net.corda.finance.flows.CashIssueFlow
 import net.corda.finance.workflows.asset.CashUtils
+import net.corda.finance.workflows.getCashBalance
 import net.corda.training.contract.IOUContract
 import net.corda.training.state.IOUState
 import java.util.*
@@ -42,7 +43,13 @@ class IOUSettleFlow(val linearId: UniqueIdentifier, val amount: Amount<Currency>
         // validate that only the borrower can run the flow
         val myIdentity = serviceHub.myInfo.legalIdentitiesAndCerts.first()
         if (myIdentity.party != inputState.borrower) {
-            throw IllegalArgumentException("Nah man")
+            throw IllegalArgumentException("IOU settlement flow can only be initiated by the borrower of the IOU.")
+        }
+
+        // validate that the borrower has sufficient cash to settle
+        val cash = serviceHub.getCashBalance(amount.token)
+        if (cash < amount) {
+            throw IllegalArgumentException("Borrower has insufficient cash to settle the IOU.")
         }
 
         // create command, with 2 signatories...?
