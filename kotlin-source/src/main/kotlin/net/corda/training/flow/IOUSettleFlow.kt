@@ -49,7 +49,7 @@ class IOUSettleFlow(val linearId: UniqueIdentifier, val amount: Amount<Currency>
         // validate that the borrower has sufficient cash to settle
         val cash = serviceHub.getCashBalance(amount.token)
         if (cash < amount) {
-            throw IllegalArgumentException("Borrower has insufficient cash to settle the IOU.")
+            throw IllegalArgumentException("Borrower has only $cash but needs $amount to settle.")
         }
 
         // create command, with 2 signatories...?

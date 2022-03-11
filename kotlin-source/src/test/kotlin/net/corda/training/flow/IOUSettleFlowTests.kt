@@ -166,16 +166,16 @@ class IOUSettleFlowTests {
      * TODO: Add a check in the flow to ensure that the borrower has enough cash to pay the lender.
      * Hint: Add another if statement similar to the one required above.
      */
-//    @Test
-//    fun borrowerMustHaveEnoughCashInRightCurrency() {
-//        val stx = issueIou(IOUState(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
-//        issueCash(1.POUNDS)
-//        val inputIou = stx.tx.outputs.single().data as IOUState
-//        val flow = IOUSettleFlow(inputIou.linearId, 5.POUNDS)
-//        val future = a.startFlow(flow)
-//        mockNetwork.runNetwork()
-//        assertFailsWith<IllegalArgumentException>("Borrower has only 1.00 GBP but needs 5.00 GBP to settle.") { future.getOrThrow() }
-//    }
+    @Test
+    fun borrowerMustHaveEnoughCashInRightCurrency() {
+        val stx = issueIou(IOUState(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
+        issueCash(1.POUNDS)
+        val inputIou = stx.tx.outputs.single().data as IOUState
+        val flow = IOUSettleFlow(inputIou.linearId, 5.POUNDS)
+        val future = a.startFlow(flow)
+        mockNetwork.runNetwork()
+        assertFailsWith<IllegalArgumentException>("Borrower has only 1.00 GBP but needs 5.00 GBP to settle.") { future.getOrThrow() }
+    }
 
     /**
      * Task 5.
